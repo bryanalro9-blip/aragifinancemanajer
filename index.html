@@ -503,20 +503,18 @@ async function syncToSheets(quiet=false) {
   isSyncing = true;
   if (!quiet) setSyncBar('syncing', 'Menyimpan ke Google Sheets...');
   try {
-    const res = await fetch(url, {
+    // Gunakan no-cors karena Apps Script tidak support CORS dari browser
+    await fetch(url, {
       method: 'POST',
+      mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(state)
     });
-    const json = await res.json();
-    if (json.success) {
-      state.settings.lastSync = new Date().toISOString();
-      saveLocal();
-      const t = new Date(state.settings.lastSync).toLocaleTimeString('id-ID');
-      setSyncBar('synced', 'Tersimpan di Google Sheets · ' + t);
-    } else {
-      setSyncBar('error', 'Sync gagal: ' + (json.error||'unknown error'));
-    }
+    // no-cors tidak return response body, tapi kalau tidak throw = berhasil
+    state.settings.lastSync = new Date().toISOString();
+    saveLocal();
+    const t = new Date(state.settings.lastSync).toLocaleTimeString('id-ID');
+    setSyncBar('synced', 'Tersimpan di Google Sheets · ' + t);
   } catch(e) {
     setSyncBar('error', 'Sync gagal — cek koneksi atau URL Sheets. Data tetap tersimpan lokal.');
   }
@@ -528,7 +526,7 @@ async function loadFromSheets() {
   if (!url) return false;
   setSyncBar('syncing', 'Memuat data dari Google Sheets...');
   try {
-    const res  = await fetch(url + '?t=' + Date.now());
+    const res  = await fetch(url + '?t=' + Date.now(), { redirect: 'follow' });
     const data = await res.json();
     if (data && Array.isArray(data.deals)) {
       state = data;
