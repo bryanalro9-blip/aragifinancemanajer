@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Aragi AI — Finance Manager</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root {
+  color-scheme: light;
+  --primary:#4f46e5; --primary-light:#eef2ff;
+  --success:#059669; --success-light:#ecfdf5;
+  --warning:#d97706; --warning-light:#fffbeb;
+  --danger:#dc2626;  --danger-light:#fef2f2;
+  --gray-50:#f9fafb; --gray-100:#f3f4f6; --gray-200:#e5e7eb;
+  --gray-300:#d1d5db; --gray-500:#6b7280; --gray-700:#374151; --gray-800:#1f2937;
+  --white:#ffffff;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--gray-50);color:var(--gray-800);display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+
+/* ── SYNC BAR ── */
+#sync-bar{display:flex;align-items:center;gap:10px;padding:7px 20px;font-size:12px;border-bottom:1px solid var(--gray-200);background:var(--white);flex-shrink:0;}
+#sync-dot{width:8px;height:8px;border-radius:50%;background:var(--gray-300);flex-shrink:0;}
+#sync-dot.synced{background:var(--success);}
+#sync-dot.syncing{background:var(--warning);animation:pulse 1s infinite;}
+#sync-dot.error{background:var(--danger);}
+#sync-dot.offline{background:var(--gray-300);}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+#sync-msg{color:var(--gray-500);flex:1;}
+.sync-btn{padding:3px 10px;border-radius:6px;border:1px solid var(--gray-300);background:transparent;font-size:11px;cursor:pointer;color:var(--gray-700);}
+.sync-btn:hover{background:var(--gray-100);}
+
+/* ── LAYOUT ── */
+.body-row{display:flex;flex:1;overflow:hidden;}
+.sidebar{width:220px;background:var(--white);border-right:1px solid var(--gray-200);display:flex;flex-direction:column;flex-shrink:0;}
+.sidebar-logo{padding:20px 16px;border-bottom:1px solid var(--gray-200);}
+.sidebar-logo h1{font-size:16px;font-weight:700;color:var(--primary);}
+.sidebar-logo p{font-size:11px;color:var(--gray-500);margin-top:2px;}
+.sidebar-nav{flex:1;padding:8px;overflow-y:auto;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--gray-700);font-weight:500;margin-bottom:2px;transition:all .15s;}
+.nav-item:hover{background:var(--gray-100);}
+.nav-item.active{background:var(--primary-light);color:var(--primary);}
+.nav-item .icon{font-size:16px;width:20px;text-align:center;}
+.main{flex:1;overflow-y:auto;padding:24px;}
+.page{display:none;}
+.page.active{display:block;}
+.page-header{margin-bottom:24px;}
+.page-header h2{font-size:20px;font-weight:700;}
+.page-header p{color:var(--gray-500);font-size:13px;margin-top:4px;}
+
+/* ── CARDS ── */
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-bottom:24px;}
+.card{background:var(--white);border-radius:12px;padding:16px;border:1px solid var(--gray-200);}
+.card-label{font-size:12px;color:var(--gray-500);font-weight:500;text-transform:uppercase;letter-spacing:.05em;}
+.card-value{font-size:22px;font-weight:700;margin-top:6px;}
+.card-sub{font-size:12px;color:var(--gray-500);margin-top:4px;}
+.card.success .card-value{color:var(--success);}
+.card.danger .card-value{color:var(--danger);}
+.card.warning .card-value{color:var(--warning);}
+.card.primary .card-value{color:var(--primary);}
+
+/* ── CHARTS ── */
+.charts-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:24px;}
+.chart-box{background:var(--white);border-radius:12px;padding:20px;border:1px solid var(--gray-200);}
+.chart-box h3{font-size:14px;font-weight:600;margin-bottom:16px;}
+.chart-box canvas{max-height:220px;}
+
+/* ── TABLES ── */
+.table-box{background:var(--white);border-radius:12px;border:1px solid var(--gray-200);overflow:hidden;margin-bottom:20px;}
+.table-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--gray-200);}
+.table-header h3{font-size:14px;font-weight:600;}
+table{width:100%;border-collapse:collapse;}
+th{text-align:left;padding:10px 16px;font-size:12px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;background:var(--gray-50);border-bottom:1px solid var(--gray-200);}
+td{padding:12px 16px;font-size:13px;border-bottom:1px solid var(--gray-100);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--gray-50);}
+.empty-state{text-align:center;color:var(--gray-500);padding:40px;font-size:13px;}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;}
+.btn-primary{background:var(--primary);color:white;}
+.btn-primary:hover{background:#4338ca;}
+.btn-sm{padding:5px 10px;font-size:12px;border-radius:6px;}
+.btn-ghost{background:transparent;color:var(--gray-700);border:1px solid var(--gray-300);}
+.btn-ghost:hover{background:var(--gray-100);}
+.btn-danger{background:var(--danger);color:white;}
+.btn-success{background:var(--success);color:white;}
+
+/* ── BADGES ── */
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;}
+.badge-prospect{background:#e0e7ff;color:#3730a3;}
+.badge-won{background:#d1fae5;color:#065f46;}
+.badge-in_progress{background:#fef3c7;color:#92400e;}
+.badge-delivered{background:#dbeafe;color:#1e40af;}
+.badge-paid{background:#d1fae5;color:#065f46;}
+.badge-lost{background:#fee2e2;color:#991b1b;}
+.badge-pending{background:#fef3c7;color:#92400e;}
+.badge-overdue{background:#fee2e2;color:#991b1b;}
+
+/* ── MODALS ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal{background:white;border-radius:16px;padding:24px;width:500px;max-height:90vh;overflow-y:auto;}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:20px;}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.form-group{margin-bottom:12px;}
+.form-group label{display:block;font-size:12px;font-weight:600;color:var(--gray-700);margin-bottom:6px;}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:9px 12px;border:1px solid var(--gray-300);border-radius:8px;font-size:13px;outline:none;transition:border .15s;}
+.form-group input:focus,.form-group select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(79,70,229,.1);}
+.modal-footer{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--gray-200);}
+
+/* ── PROGRESS ── */
+.progress-bar{background:var(--gray-200);border-radius:99px;height:8px;overflow:hidden;}
+.progress-fill{height:100%;border-radius:99px;background:var(--primary);transition:width .3s;}
+.progress-fill.danger{background:var(--danger);}
+.progress-fill.warning{background:var(--warning);}
+
+/* ── ALERTS ── */
+.alert{padding:12px 16px;border-radius:10px;font-size:13px;margin-bottom:16px;}
+.alert-warning{background:var(--warning-light);color:#92400e;border:1px solid #fde68a;}
+.alert-success{background:var(--success-light);color:#065f46;border:1px solid #6ee7b7;}
+.alert-danger{background:var(--danger-light);color:#991b1b;border:1px solid #fca5a5;}
+.alert-info{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;}
+
+/* ── SETUP STEPS ── */
+.setup-steps{counter-reset:step;}
+.setup-step{display:flex;gap:14px;margin-bottom:16px;}
+.setup-step-num{width:28px;height:28px;border-radius:50%;background:var(--primary);color:white;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:flex-shrink:0;justify-content:center;flex-shrink:0;}
+.setup-step-body{flex:1;}
+.setup-step-body strong{display:block;font-size:13px;margin-bottom:4px;}
+.setup-step-body p{font-size:12px;color:var(--gray-500);line-height:1.5;}
+.code-inline{font-family:monospace;background:var(--gray-100);padding:2px 6px;border-radius:4px;font-size:12px;}
+</style>
+</head>
+<body>
+
+<!-- SYNC BAR -->
+<div id="sync-bar">
+  <div id="sync-dot" class="offline"></div>
+  <span id="sync-msg">Google Sheets belum terhubung — setup di Settings ⚙️</span>
+  <button class="sync-btn" onclick="manualSync()">🔄 Sync</button>
+</div>
+
+<div class="body-row">
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <h1>Aragi AI</h1>
+    <p>Finance Manager</p>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-item active" onclick="showPage('overview')"><span class="icon">📊</span> Overview</div>
+    <div class="nav-item" onclick="showPage('crm')"><span class="icon">🤝</span> CRM &amp; Deals</div>
+    <div class="nav-item" onclick="showPage('revenue')"><span class="icon">💰</span> Revenue</div>
+    <div class="nav-item" onclick="showPage('expenses')"><span class="icon">💸</span> Pengeluaran</div>
+    <div class="nav-item" onclick="showPage('pl')"><span class="icon">📈</span> P&amp;L</div>
+    <div class="nav-item" onclick="showPage('cashflow')"><span class="icon">🌊</span> Cash Flow</div>
+    <div class="nav-item" onclick="showPage('services')"><span class="icon">🎯</span> Service Analysis</div>
+    <div class="nav-item" onclick="showPage('settings')"><span class="icon">⚙️</span> Target &amp; Setting</div>
+  </nav>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- OVERVIEW -->
+  <div id="page-overview" class="page active">
+    <div class="page-header"><h2>Overview</h2><p>Aragi AI Finance Dashboard</p></div>
+    <div class="cards-grid" id="kpi-cards"></div>
+    <div class="charts-grid">
+      <div class="chart-box"><h3>Revenue vs Target (6 Bulan)</h3><canvas id="chart-revenue"></canvas></div>
+      <div class="chart-box"><h3>Service Mix</h3><canvas id="chart-services"></canvas></div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-box"><h3>Pengeluaran Bulan Ini</h3><canvas id="chart-expenses"></canvas></div>
+      <div class="chart-box"><h3>Gross Margin per Service</h3><canvas id="chart-margin"></canvas></div>
+    </div>
+    <div class="table-box">
+      <div class="table-header"><h3>Deal Terbaru</h3><button class="btn btn-primary btn-sm" onclick="showPage('crm')">Lihat Semua</button></div>
+      <div id="recent-deals-table"></div>
+    </div>
+  </div>
+
+  <!-- CRM -->
+  <div id="page-crm" class="page">
+    <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div><h2>CRM &amp; Deal Pipeline</h2><p>Deal "Won" → otomatis buat invoice &amp; masuk proyeksi revenue</p></div>
+      <button class="btn btn-primary" onclick="openModal('deal')">+ Tambah Deal</button>
+    </div>
+    <div class="cards-grid" id="pipeline-cards"></div>
+    <div class="table-box">
+      <div class="table-header">
+        <h3>Semua Deals</h3>
+        <div style="display:flex;gap:8px;">
+          <select id="filter-status" onchange="renderCRM()" style="padding:6px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:12px;outline:none;">
+            <option value="">Semua Status</option>
+            <option value="prospect">Prospect</option><option value="won">Won</option>
+            <option value="in_progress">In Progress</option><option value="delivered">Delivered</option>
+            <option value="paid">Paid</option><option value="lost">Lost</option>
+          </select>
+          <select id="filter-service" onchange="renderCRM()" style="padding:6px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:12px;outline:none;">
+            <option value="">Semua Service</option>
+            <option value="company_profile">Company Profile</option><option value="immersive">Immersive</option>
+            <option value="iklan">Iklan</option><option value="it">IT Services</option><option value="film">Film/Series</option>
+          </select>
+        </div>
+      </div>
+      <div id="deals-table"></div>
+    </div>
+  </div>
+
+  <!-- REVENUE -->
+  <div id="page-revenue" class="page">
+    <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div><h2>Revenue &amp; Invoice</h2><p>Invoice otomatis terbuat saat deal di-mark Won</p></div>
+      <button class="btn btn-primary" onclick="openModal('invoice')">+ Invoice Manual</button>
+    </div>
+    <div class="cards-grid" id="revenue-cards"></div>
+    <div class="table-box">
+      <div class="table-header">
+        <h3>Daftar Invoice</h3>
+        <select id="filter-inv-status" onchange="renderRevenue()" style="padding:6px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:12px;outline:none;">
+          <option value="">Semua</option><option value="pending">Pending</option>
+          <option value="paid">Paid</option><option value="overdue">Overdue</option>
+        </select>
+      </div>
+      <div id="invoices-table"></div>
+    </div>
+  </div>
+
+  <!-- EXPENSES -->
+  <div id="page-expenses" class="page">
+    <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div><h2>Pengeluaran</h2><p>Track semua biaya operasional dan produksi</p></div>
+      <button class="btn btn-primary" onclick="openModal('expense')">+ Tambah Pengeluaran</button>
+    </div>
+    <div class="cards-grid" id="expense-cards"></div>
+    <div class="charts-grid" style="grid-template-columns:1fr 1fr;">
+      <div class="chart-box"><h3>Breakdown Kategori (Bulan Ini)</h3><canvas id="chart-exp-breakdown"></canvas></div>
+      <div class="chart-box"><h3>Trend Pengeluaran Bulanan</h3><canvas id="chart-exp-trend"></canvas></div>
+    </div>
+    <div class="table-box">
+      <div class="table-header">
+        <h3>Daftar Pengeluaran</h3>
+        <select id="filter-exp-cat" onchange="renderExpenses()" style="padding:6px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:12px;outline:none;">
+          <option value="">Semua Kategori</option>
+          <option value="salary">Gaji/SDM</option><option value="software">Software &amp; Tools</option>
+          <option value="production">Produksi</option><option value="marketing">Marketing</option>
+          <option value="operations">Operasional</option><option value="freelancer">Freelancer</option>
+          <option value="equipment">Peralatan</option><option value="other">Lainnya</option>
+        </select>
+      </div>
+      <div id="expenses-table"></div>
+    </div>
+  </div>
+
+  <!-- P&L -->
+  <div id="page-pl" class="page">
+    <div class="page-header"><h2>Profit &amp; Loss</h2><p>Laporan P&amp;L bulanan + alert otomatis kalau angka keluar batas</p></div>
+    <div id="pl-alerts"></div>
+    <div class="chart-box" style="margin-bottom:20px;"><h3>P&amp;L Trend (6 Bulan)</h3><canvas id="chart-pl"></canvas></div>
+    <div class="table-box"><div class="table-header"><h3>Laporan Bulanan</h3></div><div id="pl-table"></div></div>
+  </div>
+
+  <!-- CASH FLOW -->
+  <div id="page-cashflow" class="page">
+    <div class="page-header"><h2>Cash Flow Projection</h2><p>Proyeksi 90 hari berdasarkan invoice pending dan fixed cost</p></div>
+    <div class="cards-grid" id="cf-cards"></div>
+    <div class="chart-box" style="margin-bottom:20px;"><h3>Proyeksi Saldo (90 Hari ke Depan)</h3><canvas id="chart-cf"></canvas></div>
+    <div class="table-box"><div class="table-header"><h3>Upcoming Cash Events</h3></div><div id="cf-table"></div></div>
+  </div>
+
+  <!-- SERVICE ANALYSIS -->
+  <div id="page-services" class="page">
+    <div class="page-header"><h2>Service Line Analysis</h2><p>Identifikasi layanan paling profitable</p></div>
+    <div id="service-cards" class="cards-grid" style="grid-template-columns:repeat(5,1fr);"></div>
+    <div class="charts-grid" style="margin-top:20px;">
+      <div class="chart-box"><h3>Revenue per Service</h3><canvas id="chart-svc-revenue"></canvas></div>
+      <div class="chart-box"><h3>Gross Margin per Service</h3><canvas id="chart-svc-margin"></canvas></div>
+    </div>
+    <div class="table-box" style="margin-top:20px;"><div class="table-header"><h3>Detail Profitabilitas</h3></div><div id="service-table"></div></div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div id="page-settings" class="page">
+    <div class="page-header"><h2>Target &amp; Setting</h2><p>Hubungkan ke Google Sheets dan set financial boundaries</p></div>
+
+    <!-- GOOGLE SHEETS SETUP -->
+    <div style="background:white;border-radius:12px;border:2px solid var(--primary-light);padding:24px;max-width:600px;margin-bottom:20px;">
+      <h3 style="font-size:15px;margin-bottom:4px;color:var(--primary);">🔗 Koneksi Google Sheets</h3>
+      <p style="font-size:12px;color:var(--gray-500);margin-bottom:20px;">Data tersimpan permanen di Google Sheets milik kamu — aman, bisa diakses dari mana saja, bertahun-tahun.</p>
+
+      <div id="sheets-status-box" style="margin-bottom:20px;"></div>
+
+      <div class="form-group">
+        <label>Google Sheets Web App URL</label>
+        <input type="url" id="s-sheets-url" placeholder="https://script.google.com/macros/s/...">
+        <p style="font-size:11px;color:var(--gray-500);margin-top:4px;">Paste URL dari Apps Script deployment kamu di sini.</p>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="saveAndConnect()">Simpan &amp; Hubungkan</button>
+        <button class="btn btn-ghost btn-sm" onclick="manualSync()">🔄 Sync Sekarang</button>
+        <span id="connect-msg" style="font-size:12px;color:var(--success);"></span>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--gray-200);margin:24px 0;">
+
+      <h4 style="font-size:13px;font-weight:700;margin-bottom:16px;">Cara Setup (5 menit, sekali selamanya)</h4>
+      <div class="setup-steps">
+        <div class="setup-step"><div class="setup-step-num">1</div><div class="setup-step-body"><strong>Download file Apps Script</strong><p>Buka file <span class="code-inline">aragi_appscript.gs</span> yang sudah dibuatkan — isinya adalah kode backend untuk Google Sheets kamu.</p></div></div>
+        <div class="setup-step"><div class="setup-step-num">2</div><div class="setup-step-body"><strong>Buka Google Sheets baru</strong><p>Buat spreadsheet baru di <a href="https://sheets.google.com" target="_blank" style="color:var(--primary);">sheets.google.com</a>. Kasih nama "Aragi Finance DB" atau apapun.</p></div></div>
+        <div class="setup-step"><div class="setup-step-num">3</div><div class="setup-step-body"><strong>Buka Apps Script</strong><p>Di Sheets: klik menu <span class="code-inline">Extensions</span> → <span class="code-inline">Apps Script</span>. Hapus semua kode yang ada, paste seluruh isi file .gs.</p></div></div>
+        <div class="setup-step"><div class="setup-step-num">4</div><div class="setup-step-body"><strong>Deploy sebagai Web App</strong><p>Klik <span class="code-inline">Deploy</span> → <span class="code-inline">New deployment</span>. Type: <strong>Web app</strong>. Execute as: <strong>Me</strong>. Who has access: <strong>Anyone</strong>. Klik Deploy.</p></div></div>
+        <div class="setup-step"><div class="setup-step-num">5</div><div class="setup-step-body"><strong>Copy URL &amp; paste di sini</strong><p>Copy URL yang muncul (bentuknya: <span class="code-inline">https://script.google.com/macros/s/...</span>), paste di field URL di atas, klik Hubungkan.</p></div></div>
+      </div>
+    </div>
+
+    <!-- TARGET KEUANGAN -->
+    <div style="background:white;border-radius:12px;border:1px solid var(--gray-200);padding:24px;max-width:500px;margin-bottom:16px;">
+      <h3 style="font-size:15px;margin-bottom:20px;">🎯 Target Keuangan</h3>
+      <div class="form-group"><label>Monthly Revenue Target (IDR)</label><input type="number" id="s-monthly-target" placeholder="50000000"></div>
+      <div class="form-group"><label>Gross Margin Target (%)</label><input type="number" id="s-margin-target" placeholder="35" min="0" max="100"></div>
+      <div class="form-group"><label>Burn Rate Limit (% of revenue)</label><input type="number" id="s-burn-limit" placeholder="40" min="0" max="100"></div>
+      <div class="form-group"><label>Saldo Kas Awal (IDR)</label><input type="number" id="s-opening-balance" placeholder="0"></div>
+      <div class="form-group"><label>2-Year Revenue Goal (IDR)</label><input type="number" id="s-goal" placeholder="18000000000"></div>
+      <button class="btn btn-primary" onclick="saveSettings()">Simpan Setting</button>
+      <div id="settings-msg" style="margin-top:12px;font-size:12px;color:var(--success);"></div>
+    </div>
+
+    <!-- DATA MANAGEMENT -->
+    <div style="background:white;border-radius:12px;border:1px solid var(--gray-200);padding:24px;max-width:500px;">
+      <h3 style="font-size:15px;margin-bottom:16px;">💾 Data Management</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" onclick="exportData()">📥 Export JSON</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('import-file').click()">📤 Import JSON</button>
+        <button class="btn btn-danger btn-sm" onclick="if(confirm('Reset SEMUA data lokal? Data di Sheets tetap aman.')) { localStorage.removeItem(STORAGE_KEY); location.reload(); }">🗑 Reset Lokal</button>
+      </div>
+      <p style="font-size:11px;color:var(--gray-500);margin-top:10px;">Export JSON = backup tambahan. Kalau Sheets sudah terhubung, data sudah aman otomatis.</p>
+      <input type="file" id="import-file" accept=".json" style="display:none;" onchange="importData(event)">
+    </div>
+  </div>
+
+</div><!-- /main -->
+</div><!-- /body-row -->
+
+<!-- MODAL: DEAL -->
+<div class="modal-overlay" id="modal-deal" onclick="if(event.target===this)closeModal('deal')">
+  <div class="modal">
+    <h3 id="modal-deal-title">Tambah Deal</h3>
+    <input type="hidden" id="deal-edit-id">
+    <div class="form-row">
+      <div class="form-group"><label>Nama Client *</label><input type="text" id="d-client" placeholder="PT ABC Indonesia"></div>
+      <div class="form-group"><label>Jenis Layanan *</label>
+        <select id="d-service">
+          <option value="company_profile">Company Profile</option><option value="immersive">Immersive</option>
+          <option value="iklan">Iklan</option><option value="it">IT Services</option><option value="film">Film/Series</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Nilai Deal (IDR) *</label><input type="number" id="d-value" placeholder="25000000"></div>
+      <div class="form-group"><label>Estimasi Biaya Produksi (IDR)</label><input type="number" id="d-cogs" placeholder="8000000"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Tanggal Deal</label><input type="date" id="d-date"></div>
+      <div class="form-group"><label>Status</label>
+        <select id="d-status">
+          <option value="prospect">Prospect</option><option value="won">Won ✅</option>
+          <option value="in_progress">In Progress</option><option value="delivered">Delivered</option>
+          <option value="paid">Paid</option><option value="lost">Lost</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Payment Terms</label>
+        <select id="d-terms">
+          <option value="50_50">50% DP + 50% Selesai</option><option value="100_upfront">100% Upfront</option>
+          <option value="net30">Net 30</option><option value="net60">Net 60</option><option value="installment">Cicilan 3x</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Durasi Proyek (minggu)</label><input type="number" id="d-duration" placeholder="4" min="1"></div>
+    </div>
+    <div class="form-group">
+      <label>Retainer (recurring per bulan)?</label>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+        <input type="checkbox" id="d-retainer" onchange="toggleRetainer()" style="width:auto;cursor:pointer;">
+        <span style="font-size:13px;">Ya, ini kontrak retainer</span>
+      </div>
+    </div>
+    <div id="retainer-fields" style="display:none;">
+      <div class="form-group"><label>Durasi Retainer (bulan)</label><input type="number" id="d-retainer-months" placeholder="6" min="1"></div>
+    </div>
+    <div class="form-group"><label>Catatan</label><textarea id="d-notes" rows="2" style="resize:none;" placeholder="Detail tambahan..."></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('deal')">Batal</button>
+      <button class="btn btn-primary" onclick="saveDeal()">Simpan Deal</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EXPENSE -->
+<div class="modal-overlay" id="modal-expense" onclick="if(event.target===this)closeModal('expense')">
+  <div class="modal">
+    <h3>Tambah Pengeluaran</h3>
+    <input type="hidden" id="exp-edit-id">
+    <div class="form-row">
+      <div class="form-group"><label>Tanggal *</label><input type="date" id="e-date"></div>
+      <div class="form-group"><label>Kategori *</label>
+        <select id="e-category">
+          <option value="salary">Gaji/SDM</option><option value="software">Software &amp; Tools</option>
+          <option value="production">Produksi</option><option value="marketing">Marketing</option>
+          <option value="operations">Operasional</option><option value="freelancer">Freelancer</option>
+          <option value="equipment">Peralatan</option><option value="other">Lainnya</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label>Deskripsi *</label><input type="text" id="e-desc" placeholder="Contoh: Adobe Creative Cloud"></div>
+    <div class="form-group"><label>Jumlah (IDR) *</label><input type="number" id="e-amount" placeholder="2500000"></div>
+    <div class="form-group">
+      <label>Recurring Bulanan?</label>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+        <input type="checkbox" id="e-recurring" style="width:auto;cursor:pointer;">
+        <span style="font-size:13px;">Pengeluaran rutin tiap bulan</span>
+      </div>
+    </div>
+    <div class="form-group"><label>Linked ke Proyek (opsional)</label>
+      <select id="e-deal"><option value="">— Tidak ada —</option></select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('expense')">Batal</button>
+      <button class="btn btn-primary" onclick="saveExpense()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: INVOICE -->
+<div class="modal-overlay" id="modal-invoice" onclick="if(event.target===this)closeModal('invoice')">
+  <div class="modal">
+    <h3>Tambah Invoice Manual</h3>
+    <input type="hidden" id="inv-edit-id">
+    <div class="form-group"><label>Nama Client *</label><input type="text" id="i-client" placeholder="PT ABC Indonesia"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Jumlah (IDR) *</label><input type="number" id="i-amount" placeholder="25000000"></div>
+      <div class="form-group"><label>Tipe</label>
+        <select id="i-type">
+          <option value="dp">DP</option><option value="progress">Progress</option>
+          <option value="final">Final</option><option value="full">Full</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Tanggal Invoice</label><input type="date" id="i-date"></div>
+      <div class="form-group"><label>Jatuh Tempo</label><input type="date" id="i-due"></div>
+    </div>
+    <div class="form-group"><label>Status</label>
+      <select id="i-status">
+        <option value="pending">Pending</option><option value="paid">Paid</option><option value="overdue">Overdue</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('invoice')">Batal</button>
+      <button class="btn btn-primary" onclick="saveInvoice()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+const STORAGE_KEY = 'aragi_finance_v2';
+
+let state = {
+  deals:[], expenses:[], invoices:[],
+  settings:{ monthlyTarget:50000000, marginTarget:35, burnLimit:40, openingBalance:0, goal:18000000000, sheetsUrl:'', lastSync:null }
+};
+
+let syncTimeout = null;
+let isSyncing   = false;
+
+function loadLocal() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) { try { state = JSON.parse(saved); } catch(e){} }
+}
+
+function saveLocal() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+// ═══════════════════════════════════════════════════════════
+// GOOGLE SHEETS SYNC
+// ═══════════════════════════════════════════════════════════
+function setSyncBar(status, msg) {
+  const dot = document.getElementById('sync-dot');
+  const txt = document.getElementById('sync-msg');
+  dot.className = status; // offline | syncing | synced | error
+  txt.textContent = msg;
+}
+
+async function syncToSheets(quiet=false) {
+  const url = state.settings.sheetsUrl;
+  if (!url) return;
+  if (isSyncing) return;
+  isSyncing = true;
+  if (!quiet) setSyncBar('syncing', 'Menyimpan ke Google Sheets...');
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(state)
+    });
+    const json = await res.json();
+    if (json.success) {
+      state.settings.lastSync = new Date().toISOString();
+      saveLocal();
+      const t = new Date(state.settings.lastSync).toLocaleTimeString('id-ID');
+      setSyncBar('synced', 'Tersimpan di Google Sheets · ' + t);
+    } else {
+      setSyncBar('error', 'Sync gagal: ' + (json.error||'unknown error'));
+    }
+  } catch(e) {
+    setSyncBar('error', 'Sync gagal — cek koneksi atau URL Sheets. Data tetap tersimpan lokal.');
+  }
+  isSyncing = false;
+}
+
+async function loadFromSheets() {
+  const url = state.settings.sheetsUrl;
+  if (!url) return false;
+  setSyncBar('syncing', 'Memuat data dari Google Sheets...');
+  try {
+    const res  = await fetch(url + '?t=' + Date.now());
+    const data = await res.json();
+    if (data && Array.isArray(data.deals)) {
+      state = data;
+      saveLocal();
+      const t = new Date().toLocaleTimeString('id-ID');
+      setSyncBar('synced', 'Data dimuat dari Google Sheets · ' + t);
+      return true;
+    }
+    setSyncBar('error', 'Format data dari Sheets tidak valid.');
+    return false;
+  } catch(e) {
+    setSyncBar('error', 'Gagal load dari Sheets — pakai data lokal.');
+    return false;
+  }
+}
+
+// Debounced auto-sync: 2 detik setelah save terakhir baru sync ke Sheets
+function scheduleSync() {
+  saveLocal();
+  if (!state.settings.sheetsUrl) return;
+  clearTimeout(syncTimeout);
+  setSyncBar('syncing', 'Menyimpan...');
+  syncTimeout = setTimeout(() => syncToSheets(), 2000);
+}
+
+async function manualSync() {
+  if (!state.settings.sheetsUrl) { alert('URL Google Sheets belum diisi. Setup dulu di Settings ⚙️'); showPage('settings'); return; }
+  const loaded = await loadFromSheets();
+  if (loaded) renderPage(currentPage);
+}
+
+async function saveAndConnect() {
+  const url = document.getElementById('s-sheets-url').value.trim();
+  if (!url || !url.startsWith('https://script.google.com')) {
+    alert('URL tidak valid. Pastikan diawali dengan https://script.google.com/macros/s/...');
+    return;
+  }
+  state.settings.sheetsUrl = url;
+  saveLocal();
+  setSyncBar('syncing', 'Menghubungkan ke Google Sheets...');
+  const loaded = await loadFromSheets();
+  if (!loaded) {
+    // First time — push local data to Sheets
+    await syncToSheets();
+  }
+  document.getElementById('connect-msg').textContent = '✓ Terhubung!';
+  setTimeout(() => document.getElementById('connect-msg').textContent = '', 3000);
+  renderSettings();
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function today() { return new Date().toISOString().slice(0,10); }
+
+function fmtK(n) {
+  if (!n && n!==0) return '-';
+  const abs=Math.abs(Number(n)), sign=Number(n)<0?'-':'';
+  if (abs>=1e9) return sign+'Rp '+(abs/1e9).toFixed(1)+'M';
+  if (abs>=1e6) return sign+'Rp '+(abs/1e6).toFixed(1)+'jt';
+  if (abs>=1e3) return sign+'Rp '+(abs/1e3).toFixed(0)+'rb';
+  return sign+'Rp '+abs;
+}
+
+const SVC  = { company_profile:'Company Profile', immersive:'Immersive', iklan:'Iklan', it:'IT Services', film:'Film/Series' };
+const CAT  = { salary:'Gaji/SDM', software:'Software & Tools', production:'Produksi', marketing:'Marketing', operations:'Operasional', freelancer:'Freelancer', equipment:'Peralatan', other:'Lainnya' };
+const STAT = { prospect:'Prospect', won:'Won', in_progress:'In Progress', delivered:'Delivered', paid:'Paid', lost:'Lost', pending:'Pending', overdue:'Overdue' };
+
+let charts = {};
+let currentPage = 'overview';
+
+// ═══════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    n.classList.remove('active');
+    if (n.getAttribute('onclick')&&n.getAttribute('onclick').includes("'"+id+"'")) n.classList.add('active');
+  });
+  document.getElementById('page-'+id).classList.add('active');
+  currentPage = id;
+  renderPage(id);
+}
+
+function renderPage(id) {
+  ({overview:renderOverview,crm:renderCRM,revenue:renderRevenue,expenses:renderExpenses,pl:renderPL,cashflow:renderCashFlow,services:renderServices,settings:renderSettings})[id]?.();
+}
+
+// ═══════════════════════════════════════════════════════════
+// OVERVIEW
+// ═══════════════════════════════════════════════════════════
+function renderOverview() {
+  const now=new Date(), cm=now.toISOString().slice(0,7);
+  const monthRev=state.invoices.filter(i=>i.status==='paid'&&i.date?.startsWith(cm)).reduce((s,i)=>s+Number(i.amount||0),0);
+  const monthExp=state.expenses.filter(e=>e.date?.startsWith(cm)).reduce((s,e)=>s+Number(e.amount||0),0);
+  const totalRev=state.invoices.filter(i=>i.status==='paid').reduce((s,i)=>s+Number(i.amount||0),0);
+  const pipVal=state.deals.filter(d=>d.status==='prospect').reduce((s,d)=>s+Number(d.dealValue||0),0);
+  const paidDeals=state.deals.filter(d=>d.status==='paid');
+  const tPR=paidDeals.reduce((s,d)=>s+Number(d.dealValue||0),0);
+  const tCOGS=paidDeals.reduce((s,d)=>s+Number(d.productionCost||0),0);
+  const gm=tPR>0?((tPR-tCOGS)/tPR*100).toFixed(1):0;
+  const br=monthRev>0?(monthExp/monthRev*100).toFixed(1):0;
+  const tgt=state.settings.monthlyTarget;
+  const tPct=tgt>0?Math.min(monthRev/tgt*100,100).toFixed(0):0;
+
+  document.getElementById('kpi-cards').innerHTML=`
+    <div class="card primary"><div class="card-label">Revenue Bulan Ini</div><div class="card-value">${fmtK(monthRev)}</div><div class="card-sub">Target: ${fmtK(tgt)}</div>
+      <div style="margin-top:8px;"><div class="progress-bar"><div class="progress-fill ${tPct<50?'danger':tPct<80?'warning':''}" style="width:${tPct}%"></div></div><div style="font-size:11px;color:var(--gray-500);margin-top:4px;">${tPct}% dari target</div></div></div>
+    <div class="card ${Number(br)>state.settings.burnLimit?'danger':'success'}"><div class="card-label">Pengeluaran Bulan Ini</div><div class="card-value">${fmtK(monthExp)}</div><div class="card-sub">Burn rate: ${br}% (max ${state.settings.burnLimit}%)</div></div>
+    <div class="card ${(monthRev-monthExp)>=0?'success':'danger'}"><div class="card-label">Net Profit Bulan Ini</div><div class="card-value">${fmtK(monthRev-monthExp)}</div><div class="card-sub">${monthRev>=monthExp?'Surplus ✅':'Defisit ⚠️'}</div></div>
+    <div class="card"><div class="card-label">Total Revenue</div><div class="card-value">${fmtK(totalRev)}</div><div class="card-sub">Goal: ${fmtK(state.settings.goal)}</div></div>
+    <div class="card ${Number(gm)>=state.settings.marginTarget?'success':'warning'}"><div class="card-label">Gross Margin</div><div class="card-value">${gm}%</div><div class="card-sub">Target: ${state.settings.marginTarget}%</div></div>
+    <div class="card"><div class="card-label">Pipeline Value</div><div class="card-value">${fmtK(pipVal)}</div><div class="card-sub">${state.deals.filter(d=>d.status==='prospect').length} prospek</div></div>`;
+
+  const months=[],revD=[],tgtD=[];
+  for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1),mk=d.toISOString().slice(0,7);months.push(d.toLocaleString('id-ID',{month:'short',year:'2-digit'}));revD.push(state.invoices.filter(inv=>inv.status==='paid'&&inv.date?.startsWith(mk)).reduce((s,inv)=>s+Number(inv.amount||0),0)/1e6);tgtD.push(tgt/1e6);}
+  mkChart('chart-revenue','bar',{labels:months,datasets:[{label:'Revenue (jt)',data:revD,backgroundColor:'#4f46e5',borderRadius:6},{label:'Target (jt)',data:tgtD,type:'line',borderColor:'#ef4444',borderDash:[4,4],pointRadius:0,fill:false,tension:0}]},{scales:{y:{ticks:{callback:v=>'Rp '+v+'jt'}}}});
+
+  const sR={};state.invoices.filter(i=>i.status==='paid').forEach(inv=>{const d=state.deals.find(d=>d.id===inv.dealId);const s=d?d.serviceType:'other';sR[s]=(sR[s]||0)+Number(inv.amount||0);});
+  const sK=Object.keys(sR),C=['#4f46e5','#06b6d4','#10b981','#f59e0b','#ec4899','#8b5cf6'];
+  mkChart('chart-services','doughnut',{labels:sK.map(k=>SVC[k]||k),datasets:[{data:sK.map(k=>sR[k]/1e6),backgroundColor:C}]},{plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}});
+
+  const eC={};state.expenses.filter(e=>e.date?.startsWith(cm)).forEach(e=>{eC[e.category]=(eC[e.category]||0)+Number(e.amount||0);});
+  const eK=Object.keys(eC);
+  mkChart('chart-expenses','bar',{labels:eK.map(k=>CAT[k]||k),datasets:[{data:eK.map(k=>eC[k]/1e6),backgroundColor:'#f59e0b',borderRadius:6}]},{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'Rp '+v+'jt'}}}});
+
+  const sM={},sCt={};state.deals.filter(d=>['paid','delivered','in_progress'].includes(d.status)&&d.dealValue).forEach(d=>{const r=Number(d.dealValue),c=Number(d.productionCost||0);sM[d.serviceType]=(sM[d.serviceType]||0)+(r-c)/r*100;sCt[d.serviceType]=(sCt[d.serviceType]||0)+1;});
+  const mK=Object.keys(sM);
+  mkChart('chart-margin','bar',{labels:mK.map(k=>SVC[k]||k),datasets:[{data:mK.map(k=>(sM[k]/sCt[k]).toFixed(1)),backgroundColor:mK.map(k=>{const m=sM[k]/sCt[k];return m>=35?'#10b981':m>=20?'#f59e0b':'#ef4444';}),borderRadius:6}]},{plugins:{legend:{display:false}},scales:{y:{max:100,ticks:{callback:v=>v+'%'}}}});
+
+  const rec=[...state.deals].sort((a,b)=>b.dealDate>a.dealDate?1:-1).slice(0,5);
+  document.getElementById('recent-deals-table').innerHTML=rec.length
+    ?`<table><thead><tr><th>Client</th><th>Layanan</th><th>Nilai</th><th>Status</th><th>Tanggal</th></tr></thead><tbody>${rec.map(d=>`<tr><td><strong>${d.client}</strong></td><td>${SVC[d.serviceType]||d.serviceType}</td><td>${fmtK(d.dealValue)}</td><td><span class="badge badge-${d.status}">${STAT[d.status]||d.status}</span></td><td>${d.dealDate||'-'}</td></tr>`).join('')}</tbody></table>`
+    :'<div class="empty-state">Belum ada deal. <a href="#" onclick="showPage(\'crm\');openModal(\'deal\');return false;">Tambah deal pertama →</a></div>';
+}
+
+// ═══════════════════════════════════════════════════════════
+// CRM
+// ═══════════════════════════════════════════════════════════
+function renderCRM() {
+  const sf=document.getElementById('filter-status')?.value||'',svf=document.getElementById('filter-service')?.value||'';
+  const stages=['prospect','won','in_progress','delivered','paid','lost'],sColors={prospect:'#6366f1',won:'#10b981',in_progress:'#f59e0b',delivered:'#3b82f6',paid:'#059669',lost:'#ef4444'};
+  const cnt={},val={};stages.forEach(s=>{cnt[s]=0;val[s]=0;});state.deals.forEach(d=>{if(cnt[d.status]!==undefined){cnt[d.status]++;val[d.status]+=Number(d.dealValue||0);}});
+  document.getElementById('pipeline-cards').innerHTML=stages.map(s=>`<div class="card" style="border-top:3px solid ${sColors[s]};"><div class="card-label">${STAT[s]}</div><div class="card-value" style="font-size:18px;">${cnt[s]} deal</div><div class="card-sub">${fmtK(val[s])}</div></div>`).join('');
+  const deals=[...state.deals].filter(d=>(!sf||d.status===sf)&&(!svf||d.serviceType===svf)).sort((a,b)=>b.dealDate>a.dealDate?1:-1);
+  document.getElementById('deals-table').innerHTML=deals.length
+    ?`<table><thead><tr><th>Client</th><th>Layanan</th><th>Nilai</th><th>COGS</th><th>Margin</th><th>Status</th><th>Tanggal</th><th>Aksi</th></tr></thead><tbody>${deals.map(d=>{const r=Number(d.dealValue||0),c=Number(d.productionCost||0),m=r>0?((r-c)/r*100).toFixed(0):null,mc=m>=35?'var(--success)':m>=20?'var(--warning)':'var(--danger)';return`<tr><td><strong>${d.client}</strong>${d.retainer?' <span style="font-size:10px;background:#e0e7ff;color:#3730a3;padding:2px 6px;border-radius:4px;">Retainer</span>':''}</td><td>${SVC[d.serviceType]||d.serviceType}</td><td>${fmtK(d.dealValue)}</td><td>${fmtK(d.productionCost)||'-'}</td><td style="color:${mc};font-weight:700;">${m!==null?m+'%':'-'}</td><td><span class="badge badge-${d.status}">${STAT[d.status]||d.status}</span></td><td>${d.dealDate||'-'}</td><td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="editDeal('${d.id}')">Edit</button> <button class="btn btn-danger btn-sm" onclick="deleteDeal('${d.id}')">Hapus</button></td></tr>`;}).join('')}</tbody></table>`
+    :'<div class="empty-state">Belum ada deal.</div>';
+}
+
+// ═══════════════════════════════════════════════════════════
+// REVENUE
+// ═══════════════════════════════════════════════════════════
+function renderRevenue() {
+  const sf=document.getElementById('filter-inv-status')?.value||'';
+  const tP=state.invoices.filter(i=>i.status==='paid').reduce((s,i)=>s+Number(i.amount||0),0);
+  const tPend=state.invoices.filter(i=>i.status==='pending').reduce((s,i)=>s+Number(i.amount||0),0);
+  const tOvr=state.invoices.filter(i=>i.status==='overdue').reduce((s,i)=>s+Number(i.amount||0),0);
+  document.getElementById('revenue-cards').innerHTML=`
+    <div class="card success"><div class="card-label">Total Terbayar</div><div class="card-value">${fmtK(tP)}</div></div>
+    <div class="card warning"><div class="card-label">Pending</div><div class="card-value">${fmtK(tPend)}</div></div>
+    <div class="card danger"><div class="card-label">Overdue</div><div class="card-value">${fmtK(tOvr)}</div></div>
+    <div class="card"><div class="card-label">Total Invoice</div><div class="card-value">${state.invoices.length}</div></div>`;
+  const sorted=[...state.invoices].filter(i=>!sf||i.status===sf).sort((a,b)=>b.date>a.date?1:-1);
+  const tL={dp:'DP',progress:'Progress',final:'Final',full:'Full'};
+  document.getElementById('invoices-table').innerHTML=sorted.length
+    ?`<table><thead><tr><th>Client</th><th>Tipe</th><th>Jumlah</th><th>Tgl Invoice</th><th>Jatuh Tempo</th><th>Status</th><th>Aksi</th></tr></thead><tbody>${sorted.map(i=>`<tr><td><strong>${i.clientName||'-'}</strong></td><td>${tL[i.type]||i.type||'-'}</td><td style="font-weight:600;">${fmtK(i.amount)}</td><td>${i.date||'-'}</td><td>${i.dueDate||'-'}</td><td><span class="badge badge-${i.status}">${STAT[i.status]||i.status}</span></td><td style="white-space:nowrap;">${i.status!=='paid'?`<button class="btn btn-success btn-sm" onclick="markPaid('${i.id}')">✓ Paid</button> `:''}<button class="btn btn-danger btn-sm" onclick="deleteInvoice('${i.id}')">Hapus</button></td></tr>`).join('')}</tbody></table>`
+    :'<div class="empty-state">Belum ada invoice. Invoice otomatis dibuat saat deal di-mark Won.</div>';
+}
+
+// ═══════════════════════════════════════════════════════════
+// EXPENSES
+// ═══════════════════════════════════════════════════════════
+function renderExpenses() {
+  const cf=document.getElementById('filter-exp-cat')?.value||'',now=new Date().toISOString().slice(0,7);
+  const mE=state.expenses.filter(e=>e.date?.startsWith(now)).reduce((s,e)=>s+Number(e.amount||0),0);
+  const tE=state.expenses.reduce((s,e)=>s+Number(e.amount||0),0);
+  const rE=state.expenses.filter(e=>e.recurring).reduce((s,e)=>s+Number(e.amount||0),0);
+  document.getElementById('expense-cards').innerHTML=`
+    <div class="card danger"><div class="card-label">Pengeluaran Bulan Ini</div><div class="card-value">${fmtK(mE)}</div></div>
+    <div class="card"><div class="card-label">Total All Time</div><div class="card-value">${fmtK(tE)}</div></div>
+    <div class="card warning"><div class="card-label">Fixed Cost/Bulan</div><div class="card-value">${fmtK(rE)}</div><div class="card-sub">Recurring</div></div>
+    <div class="card"><div class="card-label">Jumlah Entri</div><div class="card-value">${state.expenses.length}</div></div>`;
+  const cats={};state.expenses.filter(e=>e.date?.startsWith(now)).forEach(e=>{cats[e.category]=(cats[e.category]||0)+Number(e.amount||0);});
+  const cK=Object.keys(cats),C=['#4f46e5','#06b6d4','#10b981','#f59e0b','#ec4899','#8b5cf6','#ef4444','#6b7280'];
+  mkChart('chart-exp-breakdown','doughnut',{labels:cK.map(k=>CAT[k]||k),datasets:[{data:cK.map(k=>cats[k]/1e6),backgroundColor:C}]},{plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}});
+  const tM=[],tD=[],n2=new Date();
+  for(let i=5;i>=0;i--){const d=new Date(n2.getFullYear(),n2.getMonth()-i,1),mk=d.toISOString().slice(0,7);tM.push(d.toLocaleString('id-ID',{month:'short',year:'2-digit'}));tD.push(state.expenses.filter(e=>e.date?.startsWith(mk)).reduce((s,e)=>s+Number(e.amount||0),0)/1e6);}
+  mkChart('chart-exp-trend','line',{labels:tM,datasets:[{data:tD,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.1)',fill:true,tension:.3}]},{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'Rp '+v+'jt'}}}});
+  const sorted=[...state.expenses].filter(e=>!cf||e.category===cf).sort((a,b)=>b.date>a.date?1:-1);
+  document.getElementById('expenses-table').innerHTML=sorted.length
+    ?`<table><thead><tr><th>Tanggal</th><th>Kategori</th><th>Deskripsi</th><th>Jumlah</th><th>Recurring</th><th>Aksi</th></tr></thead><tbody>${sorted.map(e=>`<tr><td>${e.date||'-'}</td><td><span class="badge" style="background:var(--gray-100);color:var(--gray-700);">${CAT[e.category]||e.category}</span></td><td>${e.description||'-'}</td><td style="font-weight:600;">${fmtK(e.amount)}</td><td>${e.recurring?'🔄 Ya':'-'}</td><td><button class="btn btn-danger btn-sm" onclick="deleteExpense('${e.id}')">Hapus</button></td></tr>`).join('')}</tbody></table>`
+    :'<div class="empty-state">Belum ada pengeluaran.</div>';
+}
+
+// ═══════════════════════════════════════════════════════════
+// P&L
+// ═══════════════════════════════════════════════════════════
+function renderPL() {
+  const now=new Date(),rows=[],pL=[],pR=[],pE=[],pP=[];let alerts='';
+  for(let i=5;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1),mk=d.toISOString().slice(0,7),label=d.toLocaleString('id-ID',{month:'long',year:'numeric'});
+    const rev=state.invoices.filter(inv=>inv.status==='paid'&&inv.date?.startsWith(mk)).reduce((s,inv)=>s+Number(inv.amount||0),0);
+    const cogs=state.deals.filter(de=>de.dealDate?.startsWith(mk)&&['paid','delivered','in_progress'].includes(de.status)).reduce((s,de)=>s+Number(de.productionCost||0),0);
+    const opex=state.expenses.filter(e=>e.date?.startsWith(mk)).reduce((s,e)=>s+Number(e.amount||0),0);
+    const gp=rev-cogs,np=gp-opex,gm=rev>0?(gp/rev*100).toFixed(1):null,nm=rev>0?(np/rev*100).toFixed(1):null,br=rev>0?(opex/rev*100).toFixed(1):null;
+    pL.push(d.toLocaleString('id-ID',{month:'short',year:'2-digit'}));pR.push(rev/1e6);pE.push(opex/1e6);pP.push(np/1e6);
+    rows.push({label,rev,cogs,gp,opex,np,gm,nm,br,mk});
+    if(mk===now.toISOString().slice(0,7)){
+      if(br!==null&&Number(br)>state.settings.burnLimit) alerts+=`<div class="alert alert-warning">⚠️ Burn rate <strong>${br}%</strong> melebihi batas ${state.settings.burnLimit}%.</div>`;
+      if(gm!==null&&Number(gm)<state.settings.marginTarget) alerts+=`<div class="alert alert-danger">🚨 Gross margin <strong>${gm}%</strong> di bawah target ${state.settings.marginTarget}%.</div>`;
+      if(np<0&&rev>0) alerts+=`<div class="alert alert-danger">🚨 Net profit negatif bulan ini (${fmtK(np)}).</div>`;
+      if(!alerts&&rev>0) alerts=`<div class="alert alert-success">✅ Semua metrik dalam batas aman bulan ini.</div>`;
+    }
+  }
+  document.getElementById('pl-alerts').innerHTML=alerts;
+  mkChart('chart-pl','bar',{labels:pL,datasets:[{label:'Revenue',data:pR,backgroundColor:'#4f46e5',borderRadius:4},{label:'Pengeluaran',data:pE,backgroundColor:'#f59e0b',borderRadius:4},{label:'Net Profit',data:pP,type:'line',borderColor:'#10b981',fill:false,tension:.3,pointRadius:4}]},{plugins:{legend:{display:true}},scales:{y:{ticks:{callback:v=>'Rp '+v+'jt'}}}});
+  document.getElementById('pl-table').innerHTML=`<table><thead><tr><th>Bulan</th><th>Revenue</th><th>COGS</th><th>Gross Profit</th><th>G.Margin</th><th>Opex</th><th>Net Profit</th><th>N.Margin</th><th>Burn Rate</th></tr></thead><tbody>${rows.map(r=>`<tr><td><strong>${r.label}</strong></td><td>${fmtK(r.rev)}</td><td>${fmtK(r.cogs)}</td><td style="color:${r.gp>=0?'var(--success)':'var(--danger)'};">${fmtK(r.gp)}</td><td style="color:${r.gm!==null&&Number(r.gm)>=state.settings.marginTarget?'var(--success)':'var(--warning)'};font-weight:600;">${r.gm!==null?r.gm+'%':'-'}</td><td>${fmtK(r.opex)}</td><td style="color:${r.np>=0?'var(--success)':'var(--danger)'};font-weight:700;">${fmtK(r.np)}</td><td>${r.nm!==null?r.nm+'%':'-'}</td><td style="color:${r.br!==null&&Number(r.br)>state.settings.burnLimit?'var(--danger)':'var(--success)'};">${r.br!==null?r.br+'%':'-'}</td></tr>`).join('')}</tbody></table>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// CASH FLOW
+// ═══════════════════════════════════════════════════════════
+function renderCashFlow() {
+  const t2=new Date();let bal=Number(state.settings.openingBalance||0);
+  state.invoices.filter(i=>i.status==='paid').forEach(i=>{bal+=Number(i.amount||0);});
+  state.expenses.forEach(e=>{bal-=Number(e.amount||0);});
+  const tPend=state.invoices.filter(i=>i.status==='pending').reduce((s,i)=>s+Number(i.amount||0),0);
+  const tOvr=state.invoices.filter(i=>i.status==='overdue').reduce((s,i)=>s+Number(i.amount||0),0);
+  const rM=state.expenses.filter(e=>e.recurring).reduce((s,e)=>s+Number(e.amount||0),0);
+  document.getElementById('cf-cards').innerHTML=`
+    <div class="card primary"><div class="card-label">Est. Saldo Sekarang</div><div class="card-value">${fmtK(bal)}</div></div>
+    <div class="card warning"><div class="card-label">Piutang Pending</div><div class="card-value">${fmtK(tPend)}</div></div>
+    <div class="card danger"><div class="card-label">Overdue</div><div class="card-value">${fmtK(tOvr)}</div></div>
+    <div class="card"><div class="card-label">Fixed Cost/Bulan</div><div class="card-value">${fmtK(rM)}</div></div>`;
+  const days=[],pos=[];let p=bal;
+  const pInv=state.invoices.filter(i=>i.status==='pending'&&i.dueDate);
+  for(let d=0;d<90;d++){const dt=new Date(t2.getTime()+d*86400000),dk=dt.toISOString().slice(0,10);pInv.forEach(i=>{if(i.dueDate===dk)p+=Number(i.amount||0);});if(dt.getDate()===1&&d>0)p-=rM;if(d%7===0){days.push(dk.slice(5));pos.push(p/1e6);}}
+  const last=pos[pos.length-1];
+  mkChart('chart-cf','line',{labels:days,datasets:[{data:pos,borderColor:last>=0?'#4f46e5':'#ef4444',backgroundColor:last>=0?'rgba(79,70,229,.1)':'rgba(239,68,68,.1)',fill:true,tension:.3}]},{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'Rp '+v+'jt'}}}});
+  const evts=[];
+  state.invoices.filter(i=>i.status==='pending'&&i.dueDate).forEach(i=>evts.push({date:i.dueDate,type:'in',label:'Invoice: '+i.clientName,amount:Number(i.amount||0)}));
+  state.expenses.filter(e=>e.recurring).forEach(e=>{const d=new Date(t2.getFullYear(),t2.getMonth()+1,1).toISOString().slice(0,10);evts.push({date:d,type:'out',label:'[Recurring] '+e.description,amount:Number(e.amount||0)});});
+  evts.sort((a,b)=>a.date>b.date?1:-1);
+  document.getElementById('cf-table').innerHTML=evts.length
+    ?`<table><thead><tr><th>Tanggal</th><th>Event</th><th>Tipe</th><th>Jumlah</th></tr></thead><tbody>${evts.slice(0,15).map(e=>`<tr><td>${e.date}</td><td>${e.label}</td><td style="color:${e.type==='in'?'var(--success)':'var(--danger)'};font-weight:600;">${e.type==='in'?'▲ Masuk':'▼ Keluar'}</td><td style="color:${e.type==='in'?'var(--success)':'var(--danger)'};font-weight:700;">${e.type==='in'?'+':'-'}${fmtK(e.amount)}</td></tr>`).join('')}</tbody></table>`
+    :'<div class="empty-state">Tidak ada event cash flow dijadwalkan.</div>';
+}
+
+// ═══════════════════════════════════════════════════════════
+// SERVICE ANALYSIS
+// ═══════════════════════════════════════════════════════════
+function renderServices() {
+  const svcs=['company_profile','immersive','iklan','it','film'],C=['#4f46e5','#06b6d4','#10b981','#f59e0b','#ec4899'];
+  const data=svcs.map((svc,i)=>{const deals=state.deals.filter(d=>d.serviceType===svc&&!['prospect','lost'].includes(d.status)),rev=deals.reduce((s,d)=>s+Number(d.dealValue||0),0),cogs=deals.reduce((s,d)=>s+Number(d.productionCost||0),0),gp=rev-cogs,margin=rev>0?((gp/rev)*100).toFixed(1):0;return{svc,label:SVC[svc],deals:deals.length,rev,cogs,gp,margin,color:C[i]};});
+  document.getElementById('service-cards').innerHTML=data.map(d=>`<div class="card" style="border-top:3px solid ${d.color};"><div class="card-label">${d.label}</div><div class="card-value" style="font-size:18px;color:${d.color};">${d.deals} deal</div><div class="card-sub">${fmtK(d.rev)}</div><div style="margin-top:8px;font-size:13px;font-weight:700;color:${Number(d.margin)>=state.settings.marginTarget?'var(--success)':Number(d.margin)>=20?'var(--warning)':'var(--danger)'};">${d.margin}% margin</div></div>`).join('');
+  mkChart('chart-svc-revenue','bar',{labels:data.map(d=>d.label),datasets:[{data:data.map(d=>d.rev/1e6),backgroundColor:C,borderRadius:6}]},{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'Rp '+v+'jt'}}}});
+  mkChart('chart-svc-margin','bar',{labels:data.map(d=>d.label),datasets:[{data:data.map(d=>d.margin),backgroundColor:data.map(d=>Number(d.margin)>=state.settings.marginTarget?'#10b981':Number(d.margin)>=20?'#f59e0b':'#ef4444'),borderRadius:6}]},{plugins:{legend:{display:false}},scales:{y:{max:100,ticks:{callback:v=>v+'%'}}}});
+  document.getElementById('service-table').innerHTML=`<table><thead><tr><th>Layanan</th><th>Deals</th><th>Revenue</th><th>COGS</th><th>Gross Profit</th><th>Margin</th><th>Health</th></tr></thead><tbody>${data.map(d=>`<tr><td style="font-weight:700;color:${d.color};">${d.label}</td><td>${d.deals}</td><td>${fmtK(d.rev)}</td><td>${fmtK(d.cogs)}</td><td style="color:${d.gp>=0?'var(--success)':'var(--danger)'};">${fmtK(d.gp)}</td><td style="font-weight:700;color:${Number(d.margin)>=state.settings.marginTarget?'var(--success)':Number(d.margin)>=20?'var(--warning)':'var(--danger)'};">${d.margin}%</td><td>${Number(d.margin)>=state.settings.marginTarget?'<span class="badge" style="background:#d1fae5;color:#065f46;">✓ Sehat</span>':Number(d.margin)>=20?'<span class="badge" style="background:#fef3c7;color:#92400e;">⚠ Perhatian</span>':'<span class="badge" style="background:#fee2e2;color:#991b1b;">✗ Bahaya</span>'}</td></tr>`).join('')}</tbody></table>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════════
+function renderSettings() {
+  document.getElementById('s-sheets-url').value=state.settings.sheetsUrl||'';
+  document.getElementById('s-monthly-target').value=state.settings.monthlyTarget||'';
+  document.getElementById('s-margin-target').value=state.settings.marginTarget||'';
+  document.getElementById('s-burn-limit').value=state.settings.burnLimit||'';
+  document.getElementById('s-opening-balance').value=state.settings.openingBalance||'';
+  document.getElementById('s-goal').value=state.settings.goal||'';
+  const box=document.getElementById('sheets-status-box');
+  if (state.settings.sheetsUrl) {
+    const t=state.settings.lastSync?new Date(state.settings.lastSync).toLocaleString('id-ID'):'Belum pernah sync';
+    box.innerHTML=`<div class="alert alert-success">✅ Google Sheets terhubung · Last sync: ${t}</div>`;
+  } else {
+    box.innerHTML=`<div class="alert alert-info">ℹ️ Belum terhubung. Ikuti langkah di bawah untuk setup (5 menit, sekali selamanya).</div>`;
+  }
+}
+
+function saveSettings() {
+  state.settings.monthlyTarget=Number(document.getElementById('s-monthly-target').value)||50000000;
+  state.settings.marginTarget=Number(document.getElementById('s-margin-target').value)||35;
+  state.settings.burnLimit=Number(document.getElementById('s-burn-limit').value)||40;
+  state.settings.openingBalance=Number(document.getElementById('s-opening-balance').value)||0;
+  state.settings.goal=Number(document.getElementById('s-goal').value)||18000000000;
+  scheduleSync();
+  document.getElementById('settings-msg').textContent='✓ Setting disimpan!';
+  setTimeout(()=>document.getElementById('settings-msg').textContent='',2000);
+}
+
+// ═══════════════════════════════════════════════════════════
+// MODALS
+// ═══════════════════════════════════════════════════════════
+function openModal(type) {
+  if(type==='deal'){document.getElementById('deal-edit-id').value='';document.getElementById('modal-deal-title').textContent='Tambah Deal';document.getElementById('d-client').value='';document.getElementById('d-value').value='';document.getElementById('d-cogs').value='';document.getElementById('d-date').value=today();document.getElementById('d-status').value='prospect';document.getElementById('d-terms').value='50_50';document.getElementById('d-duration').value='4';document.getElementById('d-retainer').checked=false;document.getElementById('d-retainer-months').value='';document.getElementById('d-notes').value='';document.getElementById('retainer-fields').style.display='none';}
+  if(type==='expense'){document.getElementById('exp-edit-id').value='';document.getElementById('e-date').value=today();document.getElementById('e-amount').value='';document.getElementById('e-desc').value='';document.getElementById('e-category').value='salary';document.getElementById('e-recurring').checked=false;const sel=document.getElementById('e-deal');sel.innerHTML='<option value="">— Tidak ada —</option>';state.deals.forEach(d=>sel.innerHTML+=`<option value="${d.id}">${d.client} - ${SVC[d.serviceType]||d.serviceType}</option>`);}
+  if(type==='invoice'){document.getElementById('inv-edit-id').value='';document.getElementById('i-client').value='';document.getElementById('i-amount').value='';document.getElementById('i-date').value=today();document.getElementById('i-due').value='';document.getElementById('i-type').value='full';document.getElementById('i-status').value='pending';}
+  document.getElementById('modal-'+type).classList.add('open');
+}
+function closeModal(type){document.getElementById('modal-'+type).classList.remove('open');}
+function toggleRetainer(){document.getElementById('retainer-fields').style.display=document.getElementById('d-retainer').checked?'block':'none';}
+
+// ═══════════════════════════════════════════════════════════
+// CRUD
+// ═══════════════════════════════════════════════════════════
+function saveDeal() {
+  const id=document.getElementById('deal-edit-id').value||uid();
+  const prev=state.deals.find(d=>d.id===id),prevSt=prev?prev.status:null;
+  const deal={id,client:document.getElementById('d-client').value.trim(),serviceType:document.getElementById('d-service').value,dealValue:Number(document.getElementById('d-value').value)||0,productionCost:Number(document.getElementById('d-cogs').value)||0,dealDate:document.getElementById('d-date').value,status:document.getElementById('d-status').value,paymentTerms:document.getElementById('d-terms').value,projectDurationWeeks:Number(document.getElementById('d-duration').value)||4,retainer:document.getElementById('d-retainer').checked,retainerMonths:Number(document.getElementById('d-retainer-months').value)||0,notes:document.getElementById('d-notes').value};
+  if(!deal.client){alert('Nama client wajib!');return;}if(!deal.dealValue){alert('Nilai deal wajib!');return;}
+  const idx=state.deals.findIndex(d=>d.id===id);if(idx>=0)state.deals[idx]=deal;else state.deals.push(deal);
+  if(deal.status==='won'&&prevSt!=='won')autoCreateInvoices(deal);
+  scheduleSync();closeModal('deal');renderCRM();
+}
+
+function autoCreateInvoices(deal) {
+  const base={dealId:deal.id,clientName:deal.client,date:today()};
+  const end=new Date(new Date(deal.dealDate||today()).getTime()+(deal.projectDurationWeeks||4)*7*86400000).toISOString().slice(0,10);
+  const t=deal.paymentTerms;
+  if(t==='100_upfront'){state.invoices.push({...base,id:uid(),amount:deal.dealValue,type:'full',dueDate:today(),status:'pending'});}
+  else if(t==='50_50'){state.invoices.push({...base,id:uid(),amount:deal.dealValue*.5,type:'dp',dueDate:today(),status:'pending'});state.invoices.push({...base,id:uid(),amount:deal.dealValue*.5,type:'final',dueDate:end,status:'pending'});}
+  else if(t==='net30'){const d=new Date(today());d.setDate(d.getDate()+30);state.invoices.push({...base,id:uid(),amount:deal.dealValue,type:'full',dueDate:d.toISOString().slice(0,10),status:'pending'});}
+  else if(t==='net60'){const d=new Date(today());d.setDate(d.getDate()+60);state.invoices.push({...base,id:uid(),amount:deal.dealValue,type:'full',dueDate:d.toISOString().slice(0,10),status:'pending'});}
+  else if(t==='installment'){for(let i=0;i<3;i++){const d=new Date(today());d.setMonth(d.getMonth()+i);state.invoices.push({...base,id:uid(),amount:Math.round(deal.dealValue/3),type:i===0?'dp':i===1?'progress':'final',dueDate:d.toISOString().slice(0,10),status:'pending'});}}
+  if(deal.retainer&&deal.retainerMonths>1){for(let i=1;i<deal.retainerMonths;i++){const d=new Date(today());d.setMonth(d.getMonth()+i);state.invoices.push({...base,id:uid(),amount:deal.dealValue,type:'full',dueDate:d.toISOString().slice(0,10),status:'pending'});}}
+}
+
+function editDeal(id){const d=state.deals.find(x=>x.id===id);if(!d)return;document.getElementById('deal-edit-id').value=d.id;document.getElementById('modal-deal-title').textContent='Edit Deal';document.getElementById('d-client').value=d.client;document.getElementById('d-service').value=d.serviceType;document.getElementById('d-value').value=d.dealValue;document.getElementById('d-cogs').value=d.productionCost||'';document.getElementById('d-date').value=d.dealDate;document.getElementById('d-status').value=d.status;document.getElementById('d-terms').value=d.paymentTerms;document.getElementById('d-duration').value=d.projectDurationWeeks;document.getElementById('d-retainer').checked=d.retainer;document.getElementById('d-retainer-months').value=d.retainerMonths||'';document.getElementById('d-notes').value=d.notes||'';document.getElementById('retainer-fields').style.display=d.retainer?'block':'none';document.getElementById('modal-deal').classList.add('open');}
+function deleteDeal(id){if(!confirm('Hapus deal ini?'))return;state.deals=state.deals.filter(d=>d.id!==id);state.invoices=state.invoices.filter(i=>i.dealId!==id);scheduleSync();renderCRM();}
+
+function saveExpense(){const id=document.getElementById('exp-edit-id').value||uid();const e={id,date:document.getElementById('e-date').value,category:document.getElementById('e-category').value,description:document.getElementById('e-desc').value.trim(),amount:Number(document.getElementById('e-amount').value)||0,recurring:document.getElementById('e-recurring').checked,dealId:document.getElementById('e-deal').value||null};if(!e.description){alert('Deskripsi wajib!');return;}if(!e.amount){alert('Jumlah wajib!');return;}const idx=state.expenses.findIndex(x=>x.id===id);if(idx>=0)state.expenses[idx]=e;else state.expenses.push(e);scheduleSync();closeModal('expense');renderExpenses();}
+function deleteExpense(id){if(!confirm('Hapus pengeluaran?'))return;state.expenses=state.expenses.filter(e=>e.id!==id);scheduleSync();renderExpenses();}
+
+function saveInvoice(){const id=document.getElementById('inv-edit-id').value||uid();const inv={id,clientName:document.getElementById('i-client').value.trim(),amount:Number(document.getElementById('i-amount').value)||0,type:document.getElementById('i-type').value,date:document.getElementById('i-date').value,dueDate:document.getElementById('i-due').value,status:document.getElementById('i-status').value,dealId:null};if(!inv.clientName){alert('Nama client wajib!');return;}if(!inv.amount){alert('Jumlah wajib!');return;}const idx=state.invoices.findIndex(i=>i.id===id);if(idx>=0)state.invoices[idx]=inv;else state.invoices.push(inv);scheduleSync();closeModal('invoice');renderRevenue();}
+
+function markPaid(id){const inv=state.invoices.find(i=>i.id===id);if(!inv)return;inv.status='paid';inv.date=today();if(inv.dealId){const dInvs=state.invoices.filter(i=>i.dealId===inv.dealId);if(dInvs.every(i=>i.status==='paid')){const deal=state.deals.find(d=>d.id===inv.dealId);if(deal)deal.status='paid';}}scheduleSync();renderRevenue();}
+function deleteInvoice(id){if(!confirm('Hapus invoice?'))return;state.invoices=state.invoices.filter(i=>i.id!==id);scheduleSync();renderRevenue();}
+
+// ═══════════════════════════════════════════════════════════
+// CHARTS
+// ═══════════════════════════════════════════════════════════
+function mkChart(id,type,data,options={}){if(charts[id])charts[id].destroy();const c=document.getElementById(id);if(!c)return;charts[id]=new Chart(c,{type,data,options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false},...(options.plugins||{})},scales:type==='doughnut'?{}:{x:{grid:{display:false},...(options.scales?.x||{})},y:{grid:{color:'#f3f4f6'},...(options.scales?.y||{})}},...options}});}
+
+// ═══════════════════════════════════════════════════════════
+// DATA EXPORT / IMPORT
+// ═══════════════════════════════════════════════════════════
+function exportData(){const b=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='aragi_finance_'+today()+'.json';a.click();}
+function importData(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{state=JSON.parse(ev.target.result);saveLocal();location.reload();}catch{alert('File JSON tidak valid!');}};r.readAsText(f);}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+async function init() {
+  loadLocal();
+  if (state.settings.sheetsUrl) {
+    const loaded = await loadFromSheets();
+    if (!loaded) {
+      const t=state.settings.lastSync?new Date(state.settings.lastSync).toLocaleTimeString('id-ID'):'?';
+      setSyncBar('error','Gagal load dari Sheets — pakai data lokal (last sync: '+t+')');
+    }
+  } else {
+    setSyncBar('offline','Google Sheets belum terhubung — data tersimpan lokal saja. Setup di Settings ⚙️');
+  }
+  renderOverview();
+}
+
+init();
+</script>
+</body>
+</html>
