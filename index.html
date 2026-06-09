@@ -137,7 +137,7 @@ tr:hover td{background:var(--gray-50);}
 <!-- SYNC BAR -->
 <div id="sync-bar">
   <div id="sync-dot" class="offline"></div>
-  <span id="sync-msg">Google Sheets belum terhubung — setup di Settings ⚙️</span>
+  <span id="sync-msg">Menghubungkan ke Supabase...</span>
   <button class="sync-btn" onclick="manualSync()">🔄 Sync</button>
 </div>
 
@@ -284,35 +284,19 @@ tr:hover td{background:var(--gray-50);}
 
   <!-- SETTINGS -->
   <div id="page-settings" class="page">
-    <div class="page-header"><h2>Target &amp; Setting</h2><p>Hubungkan ke Google Sheets dan set financial boundaries</p></div>
+    <div class="page-header"><h2>Target &amp; Setting</h2><p>Koneksi Supabase sudah otomatis — tidak perlu setup manual</p></div>
 
-    <!-- GOOGLE SHEETS SETUP -->
+    <!-- SUPABASE STATUS -->
     <div style="background:white;border-radius:12px;border:2px solid var(--primary-light);padding:24px;max-width:600px;margin-bottom:20px;">
-      <h3 style="font-size:15px;margin-bottom:4px;color:var(--primary);">🔗 Koneksi Google Sheets</h3>
-      <p style="font-size:12px;color:var(--gray-500);margin-bottom:20px;">Data tersimpan permanen di Google Sheets milik kamu — aman, bisa diakses dari mana saja, bertahun-tahun.</p>
+      <h3 style="font-size:15px;margin-bottom:4px;color:var(--primary);">☁️ Koneksi Supabase</h3>
+      <p style="font-size:12px;color:var(--gray-500);margin-bottom:20px;">Data tersimpan permanen di Supabase — aman, bisa diakses dari mana saja, real-time sync.</p>
 
       <div id="sheets-status-box" style="margin-bottom:20px;"></div>
 
-      <div class="form-group">
-        <label>Google Sheets Web App URL</label>
-        <input type="url" id="s-sheets-url" placeholder="https://script.google.com/macros/s/...">
-        <p style="font-size:11px;color:var(--gray-500);margin-top:4px;">Paste URL dari Apps Script deployment kamu di sini.</p>
-      </div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-        <button class="btn btn-primary" onclick="saveAndConnect()">Simpan &amp; Hubungkan</button>
+        <button class="btn btn-primary" onclick="saveAndConnect()">🔄 Sync &amp; Hubungkan</button>
         <button class="btn btn-ghost btn-sm" onclick="manualSync()">🔄 Sync Sekarang</button>
         <span id="connect-msg" style="font-size:12px;color:var(--success);"></span>
-      </div>
-
-      <hr style="border:none;border-top:1px solid var(--gray-200);margin:24px 0;">
-
-      <h4 style="font-size:13px;font-weight:700;margin-bottom:16px;">Cara Setup (5 menit, sekali selamanya)</h4>
-      <div class="setup-steps">
-        <div class="setup-step"><div class="setup-step-num">1</div><div class="setup-step-body"><strong>Download file Apps Script</strong><p>Buka file <span class="code-inline">aragi_appscript.gs</span> yang sudah dibuatkan — isinya adalah kode backend untuk Google Sheets kamu.</p></div></div>
-        <div class="setup-step"><div class="setup-step-num">2</div><div class="setup-step-body"><strong>Buka Google Sheets baru</strong><p>Buat spreadsheet baru di <a href="https://sheets.google.com" target="_blank" style="color:var(--primary);">sheets.google.com</a>. Kasih nama "Aragi Finance DB" atau apapun.</p></div></div>
-        <div class="setup-step"><div class="setup-step-num">3</div><div class="setup-step-body"><strong>Buka Apps Script</strong><p>Di Sheets: klik menu <span class="code-inline">Extensions</span> → <span class="code-inline">Apps Script</span>. Hapus semua kode yang ada, paste seluruh isi file .gs.</p></div></div>
-        <div class="setup-step"><div class="setup-step-num">4</div><div class="setup-step-body"><strong>Deploy sebagai Web App</strong><p>Klik <span class="code-inline">Deploy</span> → <span class="code-inline">New deployment</span>. Type: <strong>Web app</strong>. Execute as: <strong>Me</strong>. Who has access: <strong>Anyone</strong>. Klik Deploy.</p></div></div>
-        <div class="setup-step"><div class="setup-step-num">5</div><div class="setup-step-body"><strong>Copy URL &amp; paste di sini</strong><p>Copy URL yang muncul (bentuknya: <span class="code-inline">https://script.google.com/macros/s/...</span>), paste di field URL di atas, klik Hubungkan.</p></div></div>
       </div>
     </div>
 
@@ -496,82 +480,79 @@ function setSyncBar(status, msg) {
   txt.textContent = msg;
 }
 
+// ── SUPABASE CONFIG ──────────────────────────────────────────
+const SUPA_URL = 'https://yzjqvcaotwmukbitskuw.supabase.co';
+const SUPA_KEY = 'sb_publishable_q6wO8fSt1po3WRNet4_f7Q_9OL3rdCY';
+const SUPA_HEADERS = {
+  'Content-Type': 'application/json',
+  'apikey': SUPA_KEY,
+  'Authorization': 'Bearer ' + SUPA_KEY
+};
+
 async function syncToSheets(quiet=false) {
-  const url = state.settings.sheetsUrl;
-  if (!url) return;
   if (isSyncing) return;
   isSyncing = true;
-  if (!quiet) setSyncBar('syncing', 'Menyimpan ke Google Sheets...');
+  if (!quiet) setSyncBar('syncing', 'Menyimpan ke Supabase...');
   try {
-    // Gunakan no-cors karena Apps Script tidak support CORS dari browser
-    await fetch(url, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(state)
+    const res = await fetch(SUPA_URL + '/rest/v1/aragi_data?id=eq.main', {
+      method: 'PATCH',
+      headers: { ...SUPA_HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ payload: state, updated_at: new Date().toISOString() })
     });
-    // no-cors tidak return response body, tapi kalau tidak throw = berhasil
-    state.settings.lastSync = new Date().toISOString();
-    saveLocal();
-    const t = new Date(state.settings.lastSync).toLocaleTimeString('id-ID');
-    setSyncBar('synced', 'Tersimpan di Google Sheets · ' + t);
+    if (res.ok) {
+      state.settings.lastSync = new Date().toISOString();
+      saveLocal();
+      const t = new Date(state.settings.lastSync).toLocaleTimeString('id-ID');
+      setSyncBar('synced', 'Tersimpan di Supabase · ' + t);
+    } else {
+      const err = await res.text();
+      setSyncBar('error', 'Sync gagal: ' + err);
+    }
   } catch(e) {
-    setSyncBar('error', 'Sync gagal — cek koneksi atau URL Sheets. Data tetap tersimpan lokal.');
+    setSyncBar('error', 'Sync gagal — cek koneksi. Data tetap tersimpan lokal.');
   }
   isSyncing = false;
 }
 
 async function loadFromSheets() {
-  const url = state.settings.sheetsUrl;
-  if (!url) return false;
-  setSyncBar('syncing', 'Memuat data dari Google Sheets...');
+  setSyncBar('syncing', 'Memuat data dari Supabase...');
   try {
-    const res  = await fetch(url + '?t=' + Date.now(), { redirect: 'follow' });
-    const data = await res.json();
-    if (data && Array.isArray(data.deals)) {
-      state = data;
+    const res  = await fetch(SUPA_URL + '/rest/v1/aragi_data?id=eq.main&select=payload', {
+      headers: SUPA_HEADERS
+    });
+    const rows = await res.json();
+    if (rows && rows[0] && rows[0].payload && Array.isArray(rows[0].payload.deals)) {
+      state = rows[0].payload;
       saveLocal();
       const t = new Date().toLocaleTimeString('id-ID');
-      setSyncBar('synced', 'Data dimuat dari Google Sheets · ' + t);
+      setSyncBar('synced', 'Data dimuat dari Supabase · ' + t);
       return true;
     }
-    setSyncBar('error', 'Format data dari Sheets tidak valid.');
+    setSyncBar('error', 'Format data dari Supabase tidak valid.');
     return false;
   } catch(e) {
-    setSyncBar('error', 'Gagal load dari Sheets — pakai data lokal.');
+    setSyncBar('error', 'Gagal load dari Supabase — pakai data lokal.');
     return false;
   }
 }
 
-// Debounced auto-sync: 2 detik setelah save terakhir baru sync ke Sheets
+// Debounced auto-sync: 2 detik setelah save terakhir baru sync ke Supabase
 function scheduleSync() {
   saveLocal();
-  if (!state.settings.sheetsUrl) return;
   clearTimeout(syncTimeout);
   setSyncBar('syncing', 'Menyimpan...');
   syncTimeout = setTimeout(() => syncToSheets(), 2000);
 }
 
 async function manualSync() {
-  if (!state.settings.sheetsUrl) { alert('URL Google Sheets belum diisi. Setup dulu di Settings ⚙️'); showPage('settings'); return; }
   const loaded = await loadFromSheets();
   if (loaded) renderPage(currentPage);
 }
 
 async function saveAndConnect() {
-  const url = document.getElementById('s-sheets-url').value.trim();
-  if (!url || !url.startsWith('https://script.google.com')) {
-    alert('URL tidak valid. Pastikan diawali dengan https://script.google.com/macros/s/...');
-    return;
-  }
-  state.settings.sheetsUrl = url;
-  saveLocal();
-  setSyncBar('syncing', 'Menghubungkan ke Google Sheets...');
+  setSyncBar('syncing', 'Menghubungkan ke Supabase...');
   const loaded = await loadFromSheets();
-  if (!loaded) {
-    // First time — push local data to Sheets
-    await syncToSheets();
-  }
+  if (!loaded) await syncToSheets();
   document.getElementById('connect-msg').textContent = '✓ Terhubung!';
   setTimeout(() => document.getElementById('connect-msg').textContent = '', 3000);
   renderSettings();
